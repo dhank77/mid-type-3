@@ -85,7 +85,8 @@
   var PRESETS = { off:{enabled:false,latency:0,bandwidth:1}, fast4g:{enabled:true,latency:150,bandwidth:200},
     slow4g:{enabled:true,latency:400,bandwidth:50}, '3g':{enabled:true,latency:600,bandwidth:25}, demo:{enabled:true,latency:400,bandwidth:12} };
   var $ = function (id) { return document.getElementById(id); };
-  var status = $('status'), ready = false, current = {before:{}, after:{}}, token = '', waiter = null;
+  var status = $('status'), ready = false, current = {before:{}, after:{}}, token = '', waiter = null, hiddenDuringRun = false;
+  document.addEventListener('visibilitychange', function () { if (document.hidden && waiter) hiddenDuringRun = true; });
 
   function setStatus(t) { status.textContent = t; }
 
@@ -134,6 +135,7 @@
   function loadBoth() {
     token = 'run=' + Date.now() + Math.random().toString(36).slice(2, 6);
     current = {before:{}, after:{}};
+    hiddenDuringRun = document.hidden;
     ['before', 'after'].forEach(function (k) {
       $('m-' + k).textContent = 'FCP …';
       $('f-' + k).src = 'about:blank';
@@ -163,6 +165,10 @@
         if (i >= n) { render(data, n); btns.forEach(function (b) { b.disabled = false; }); setStatus('Benchmark selesai (' + n + ' run).'); return; }
         setStatus('Run ' + (i + 1) + ' dari ' + n + '…');
         loadBoth().then(function () {
+          if (hiddenDuringRun) {            // tab sempat tersembunyi → browser menunda paint, FCP tidak valid
+            setStatus('Tab tersembunyi saat run ' + (i + 1) + ' — run diulang. Biarkan tab ini terlihat.');
+            return setTimeout(next, 1500);
+          }
           ['before', 'after'].forEach(function (k) {
             ['fcp', 'dcl', 'load'].forEach(function (m) { if (current[k][m] != null) data[k][m].push(current[k][m]); });
           });

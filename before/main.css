@@ -68,4 +68,4 @@ img { max-width: 100%; display: block; }
 }
 
 /* alat ukur demo */
-.badge-metrics { position: fixed; right: 12px; bottom: 12px; z-index: 99; background: #111; color: #9f9; font: 12px/1.5 ui-monospace, Menlo, monospace; padding: 8px 12px; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.badge-metrics { position: fixed; left: 12px; bottom: 12px; z-index: 99; background: #111; color: #9f9; font: 12px/1.5 ui-monospace, Menlo, monospace; padding: 8px 12px; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
