@@ -1,0 +1,3 @@
+# Situs statis: tidak perlu build. Publish folder ini apa adanya.
+[build]
+  publish = "."

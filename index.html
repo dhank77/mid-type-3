@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studi Kasus Kopi Senja</title>
+<style>
+  :root{--bg:#f4f1ec;--fg:#1d1d1b;--card:#fff;--line:#d9d3c8;--bad:#c62828;--good:#1b7f3b;--muted:#777}
+  @media (prefers-color-scheme:dark){:root{--bg:#141412;--fg:#ecece6;--card:#1c1c19;--line:#33332e;--bad:#ff7a70;--good:#5fd17f;--muted:#999}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+  header,.wrap{max-width:1300px;margin:0 auto;padding:0 16px}
+  header{padding-top:20px}
+  h1{margin:0 0 4px;font-size:1.4rem}
+  p{margin:0;color:var(--muted)}
+  .ctrl{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:14px 0;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px}
+  label{display:grid;gap:3px;font-size:.8rem;color:var(--muted)}
+  select,input{font:inherit;padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--fg);width:110px}
+  select{width:190px}
+  button{font:inherit;padding:8px 16px;border-radius:8px;border:0;background:#0b5fff;color:#fff;cursor:pointer}
+  button.sec{background:transparent;color:var(--fg);border:1px solid var(--line)}
+  button:disabled{opacity:.5;cursor:wait}
+  #status{font-size:.85rem;color:var(--muted);min-height:1.3em;margin-bottom:8px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding-bottom:20px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .panel h2{margin:0;padding:10px 14px;font-size:1rem;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}
+  .before h2{color:var(--bad)} .after h2{color:var(--good)}
+  .panel h2 small{font-weight:400;color:var(--fg);font-family:ui-monospace,monospace}
+  iframe{width:100%;height:62vh;border:0;background:#fff;display:block}
+  table{border-collapse:collapse;width:100%;background:var(--card);font-size:.9rem;margin-bottom:12px}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left}
+  th{background:var(--bg)}
+  .good{color:var(--good);font-weight:600}.bad{color:var(--bad);font-weight:600}
+  details{margin-bottom:32px;color:var(--muted);font-size:.85rem}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Studi Kasus: Website “Kopi Senja”</h1>
+  <p>Halaman yang sama, dua versi. Atur profil jaringan, lalu bandingkan FCP, DOMContentLoaded, dan load.</p>
+</header>
+
+<div class="wrap">
+  <div class="ctrl">
+    <label>Profil jaringan simulasi
+      <select id="preset">
+        <option value="off">Tanpa simulasi (jaringan asli)</option>
+        <option value="fast4g">Fast 4G (150 ms, 200 B/ms)</option>
+        <option value="slow4g">Slow 4G (400 ms, 50 B/ms)</option>
+        <option value="3g">3G (600 ms, 25 B/ms)</option>
+        <option value="demo" selected>Demo lambat (400 ms, 12 B/ms)</option>
+        <option value="custom">Kustom…</option>
+      </select>
+    </label>
+    <label>Latensi (ms)<input id="latency" type="number" min="0" step="50" value="400"></label>
+    <label>Bandwidth (B/ms)<input id="bandwidth" type="number" min="1" step="1" value="12"></label>
+    <label>Jumlah run<input id="runs" type="number" min="1" max="15" value="5"></label>
+    <button id="reload">Muat ulang (1×)</button>
+    <button id="bench" class="sec">Jalankan benchmark</button>
+  </div>
+  <div id="status">Menyiapkan simulasi…</div>
+
+  <div class="grid">
+    <section class="panel before"><h2>Sebelum (render-blocking) <small id="m-before">FCP …</small></h2><iframe id="f-before" title="Sebelum"></iframe></section>
+    <section class="panel after"><h2>Sesudah (dioptimasi) <small id="m-after">FCP …</small></h2><iframe id="f-after" title="Sesudah"></iframe></section>
+  </div>
+
+  <h3 style="margin:0 0 8px">Hasil benchmark (median)</h3>
+  <table>
+    <thead><tr><th>Metrik</th><th>Sebelum</th><th>Sesudah</th><th>Selisih</th></tr></thead>
+    <tbody id="result"><tr><td colspan="4" style="color:var(--muted)">Belum ada data. Klik “Jalankan benchmark”.</td></tr></tbody>
+  </table>
+  <details>
+    <summary>Cara kerja &amp; catatan</summary>
+    <p>Simulasi memakai Service Worker (<code>sw.js</code>) yang menahan setiap respons dari <code>/before/</code> dan <code>/after/</code>
+    sebesar <em>latensi + ukuran ÷ bandwidth</em>, sehingga berjalan di hosting statis seperti Netlify. Delay ini ditambahkan di atas jaringan asli.
+    Untuk verifikasi yang lebih ketat, pilih “Tanpa simulasi” lalu gunakan DevTools → Network → throttling (Slow 4G) atau Lighthouse
+    pada <code>/before/</code> dan <code>/after/</code>. Respons dikirim sekaligus (tanpa streaming), sehingga browser tidak dapat mem-parse HTML lebih awal.</p>
+  </details>
+</div>
+
+<script>
+(function () {
+  var PRESETS = { off:{enabled:false,latency:0,bandwidth:1}, fast4g:{enabled:true,latency:150,bandwidth:200},
+    slow4g:{enabled:true,latency:400,bandwidth:50}, '3g':{enabled:true,latency:600,bandwidth:25}, demo:{enabled:true,latency:400,bandwidth:12} };
+  var $ = function (id) { return document.getElementById(id); };
+  var status = $('status'), ready = false, current = {before:{}, after:{}}, token = '', waiter = null;
+
+  function setStatus(t) { status.textContent = t; }
+
+  /* ---- Service Worker ---- */
+  function setupSW() {
+    if (!('serviceWorker' in navigator)) { setStatus('Browser tidak mendukung Service Worker — simulasi tidak tersedia (gunakan throttling DevTools).'); return Promise.resolve(false); }
+    return navigator.serviceWorker.register('sw.js').then(function () { return navigator.serviceWorker.ready; })
+      .then(function () { return sendConfig(); })
+      .then(function () { ready = true; setStatus('Simulasi siap.'); return true; })
+      .catch(function (e) { setStatus('Gagal mengaktifkan simulasi: ' + e.message); return false; });
+  }
+  function cfg() {
+    return { enabled: $('preset').value !== 'off', latency: +$('latency').value || 0, bandwidth: Math.max(1, +$('bandwidth').value || 1) };
+  }
+  function sendConfig() {
+    return navigator.serviceWorker.ready.then(function (reg) {
+      return new Promise(function (res) {
+        var ch = new MessageChannel(); ch.port1.onmessage = function () { res(); };
+        reg.active.postMessage({ type: 'config', config: cfg() }, [ch.port2]);
+      });
+    });
+  }
+
+  /* ---- Preset UI ---- */
+  $('preset').onchange = function () {
+    var p = PRESETS[this.value];
+    if (p) { $('latency').value = p.latency; $('bandwidth').value = p.bandwidth; }
+    if (ready) sendConfig();
+  };
+  ['latency', 'bandwidth'].forEach(function (id) {
+    $(id).oninput = function () { $('preset').value = 'custom'; if (ready) sendConfig(); };
+  });
+
+  /* ---- Metrik dari iframe ---- */
+  addEventListener('message', function (e) {
+    if (!e.data || !e.data.metrics) return;
+    var k = e.data.page.indexOf('/after/') >= 0 ? 'after' : 'before';
+    if (token && e.data.search.indexOf(token) < 0) return;          // abaikan sisa run lama
+    current[k] = e.data.metrics;
+    $('m-' + k).textContent = 'FCP ' + (current[k].fcp != null ? current[k].fcp + ' ms' : '…');
+    if (waiter && current.before.load != null && current.after.load != null && current.before.fcp != null && current.after.fcp != null) {
+      var w = waiter; waiter = null; w();
+    }
+  });
+
+  function loadBoth() {
+    token = 'run=' + Date.now() + Math.random().toString(36).slice(2, 6);
+    current = {before:{}, after:{}};
+    ['before', 'after'].forEach(function (k) {
+      $('m-' + k).textContent = 'FCP …';
+      $('f-' + k).src = 'about:blank';
+    });
+    return new Promise(function (resolve) {
+      waiter = resolve;
+      setTimeout(function () {                                       // beri jeda agar kedua iframe start bersamaan
+        $('f-before').src = 'before/?' + token;
+        $('f-after').src = 'after/?' + token;
+      }, 150);
+      setTimeout(function () { if (waiter) { waiter = null; resolve(); } }, 60000);   // pengaman
+    });
+  }
+
+  $('reload').onclick = function () {
+    (ready ? sendConfig() : Promise.resolve()).then(loadBoth).then(function () { setStatus('Selesai.'); });
+  };
+
+  /* ---- Benchmark ---- */
+  function median(a) { var s = a.slice().sort(function (x, y) { return x - y; }), m = s.length >> 1; return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); }
+  $('bench').onclick = function () {
+    var n = Math.max(1, Math.min(15, +$('runs').value || 5)), data = {before:{fcp:[],dcl:[],load:[]}, after:{fcp:[],dcl:[],load:[]}};
+    var btns = document.querySelectorAll('button'); btns.forEach(function (b) { b.disabled = true; });
+    (ready ? sendConfig() : Promise.resolve()).then(function () {
+      var i = 0;
+      (function next() {
+        if (i >= n) { render(data, n); btns.forEach(function (b) { b.disabled = false; }); setStatus('Benchmark selesai (' + n + ' run).'); return; }
+        setStatus('Run ' + (i + 1) + ' dari ' + n + '…');
+        loadBoth().then(function () {
+          ['before', 'after'].forEach(function (k) {
+            ['fcp', 'dcl', 'load'].forEach(function (m) { if (current[k][m] != null) data[k][m].push(current[k][m]); });
+          });
+          i++; next();
+        });
+      })();
+    });
+  };
+  function render(d, n) {
+    var rows = [['fcp', 'FCP (konten pertama tampil)'], ['dcl', 'DOMContentLoaded'], ['load', 'load']];
+    $('result').innerHTML = rows.map(function (r) {
+      var b = median(d.before[r[0]]), a = median(d.after[r[0]]), diff = a - b, pct = Math.round(Math.abs(diff) / b * 100);
+      return '<tr><td>' + r[1] + '</td><td>' + b + ' ms</td><td>' + a + ' ms</td><td class="' + (diff < 0 ? 'good' : 'bad') + '">' +
+        (diff < 0 ? '−' : '+') + Math.abs(diff) + ' ms (' + pct + '% ' + (diff < 0 ? 'lebih cepat' : 'lebih lambat') + ')</td></tr>';
+    }).join('') + '<tr><td colspan="4" style="color:var(--muted);font-size:.8rem">Median dari ' + n + ' run · profil: ' +
+      $('preset').options[$('preset').selectedIndex].text + '</td></tr>';
+  }
+
+  setupSW().then(function () { loadBoth(); });
+})();
+</script>
+</body>
+</html>
